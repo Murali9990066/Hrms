@@ -1,4 +1,6 @@
-require('dotenv').config();
+require('dotenv').config({
+    path: process.env.ENV_FILE || '.env'
+});
 const express = require('express');
 
 const authRoutes = require('./AuthMicroservice/auth.routes');
