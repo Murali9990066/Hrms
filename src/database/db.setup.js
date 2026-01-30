@@ -10,7 +10,9 @@
  * Safe to run multiple times (idempotent).
  */
 
-require('dotenv').config();
+require('dotenv').config({
+  path: process.env.ENV_FILE || '.env'
+});
 const pool = require('./db.connection');
 
 /* ============================================================
