@@ -57,7 +57,9 @@ exports.requestOtp = async (req, res) => {
             status: "success",
             statusCode: 200,
             message: 'OTP generated successfully',
+            data: {
             expiresIn: OTP_EXPIRY_MINUTES * 60 // in seconds
+            }
         });
 
     } catch (error) {
@@ -161,8 +163,8 @@ exports.verifyOtp = async (req, res) => {
             status: "success",
             statusCode: 200,
             message: 'OTP verified successfully',
-            accessToken: token,
             data: {
+                accessToken: token,
             employee: {
                 id: employee.id,
                 email,

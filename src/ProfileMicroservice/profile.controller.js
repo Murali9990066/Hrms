@@ -131,7 +131,8 @@ exports.updateProfile = async (req, res) => {
         return res.status(200).json({
             status: "success",
             statusCode: 200,
-            message: 'Profile updated successfully'
+            message: 'Profile updated successfully',
+            data:{}
         });
 
     } catch (error) {
