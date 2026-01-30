@@ -10,15 +10,9 @@ const profileRoutes = require('./ProfileMicroservice/profile.routes');
 
 const app = express();
 
-/* -------------------- CORS CONFIG -------------------- */
-app.use(cors({
-    origin: 'http://localhost:8080', // frontend origin
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization']
-}));
-
-// Handle preflight requests explicitly
-app.options('*', cors());
+/* -------------------- CORS -------------------- */
+// Accept requests from ANY origin (POC-safe)
+app.use(cors());
 
 /* -------------------- BODY PARSERS -------------------- */
 app.use(express.json());
@@ -30,6 +24,7 @@ app.use('/profile', profileRoutes);
 
 /* -------------------- SERVER -------------------- */
 const PORT = process.env.PORT || 3000;
+
 app.listen(PORT, () => {
     console.log(`🚀 Server running on port ${PORT}`);
 });
