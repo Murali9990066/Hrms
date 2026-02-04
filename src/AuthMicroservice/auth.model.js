@@ -11,7 +11,6 @@ exports.findEmployeeByEmail = async (email) => {
         id,
         role,
         is_active,
-        first_login,
         profile_completed
      FROM employees
      WHERE email = ?`,
@@ -88,15 +87,4 @@ exports.markOtpAsUsed = async (otpId) => {
 
 /* ===================== LOGIN META ===================== */
 
-/**
- * Update login metadata
- */
-exports.updateLoginMeta = async (employeeId) => {
-    await pool.query(
-        `UPDATE employees
-     SET first_login = FALSE,
-         last_login_at = NOW()
-     WHERE id = ?`,
-        [employeeId]
-    );
-};
+

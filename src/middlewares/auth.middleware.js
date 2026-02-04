@@ -31,7 +31,7 @@ exports.authenticate = (req, res, next) => {
         // }
 
         req.user = {
-            userId: decoded.employeeId,
+            employeeId: decoded.employeeId,
             role: decoded.role
         };
 

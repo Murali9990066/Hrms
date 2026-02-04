@@ -6,7 +6,7 @@ const COMPANY_DOMAIN = '@intellious.tech';
 const DUMMY_OTP = process.env.DUMMY_OTP || '123456';
 const OTP_EXPIRY_MINUTES = 5;
 const JWT_SECRET = process.env.JWT_SECRET || 'dev_secret_key';
-const JWT_EXPIRY = '15m';
+const JWT_EXPIRY = '60m';
 
 /**
  * POST /auth/request-otp
@@ -146,8 +146,6 @@ exports.verifyOtp = async (req, res) => {
             });
         }
 
-        await authModel.updateLoginMeta(employee.id);
-
         // ✅ UPDATED JWT PAYLOAD (NO status)
         const token = jwt.sign(
             {
@@ -169,7 +167,6 @@ exports.verifyOtp = async (req, res) => {
                 id: employee.id,
                 email,
                 role: employee.role,
-                firstLogin: employee.first_login,
                 profileCompleted: employee.profile_completed,
                 nextStep: employee.profile_completed ? 'DASHBOARD' : 'PROFILE_CREATION'
             },
