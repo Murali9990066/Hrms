@@ -35,12 +35,17 @@ const RESTRICTED_FIELDS = [
     'manager_name'
 ];
 const ALLOWED_DOCUMENTS = [
-    'PROFILE_PHOTO',
-    'RESUME',
-    'DEGREE_CERTIFICATE',
-    'EXPERIENCE_LETTER',
-    'ADDRESS_PROOF',
-    'CANCELLED_CHEQUE'
+    { id: 1, label: "Professional Documents", isMandatory: false, type: "PROFESSIONAL_DOCUMENTS" },
+    { id: 2, label: "Degree", isMandatory: true, type: "DEGREE" },
+    { id: 3, label: "Aadhaar", isMandatory: true, type: "AADHAAR" },
+    { id: 4, label: "Tax Deductions Supporting Documents", isMandatory: false, type: "TAX_DEDUCTIONS_SUPPORTING_DOCUMENTS" },
+    { id: 5, label: "Employment Contract", isMandatory: false, type: "EMPLOYMENT_CONTRACT" },
+    { id: 6, label: "Previous Employment Documents", isMandatory: true, type: "PREVIOUS_EMPLOYMENT_DOCUMENTS" },
+    { id: 7, label: "Bank Account Details", isMandatory: true, type: "BANK_ACCOUNT_DETAILS" },
+    { id: 8, label: "Employee Photo", isMandatory: false, type: "EMPLOYEE_PHOTO" },
+    { id: 9, label: "PAN", isMandatory: false, type: "PAN" },
+    { id: 10, label: "CV", isMandatory: true, type: "CV" },
+    { id: 11, label: "Other", isMandatory: false, type: "OTHER" }
 ];
 
 /**
@@ -52,10 +57,10 @@ exports.getProfile = async (req, res) => {
 
         let targetEmployeeId;
 
-        if (role === 'EMPLOYEE') {
+        if (role === 'EMPLOYEE' || role === 'MANAGER' || role === 'HR' || role === 'ADMIN') {
             targetEmployeeId = employeeId;
         } else {
-            targetEmployeeId = req.query.employeeId || userId;
+            targetEmployeeId = req.query.employeeId;
         }
 
         const employee = await profileModel.getEmployeeById(targetEmployeeId);
@@ -85,70 +90,74 @@ exports.getProfile = async (req, res) => {
     }
 };
 
-/**
- * PUT /profile
- */
 exports.updateProfile = async (req, res) => {
     try {
         const { role, employeeId } = req.user;
         const body = req.body;
 
-        // Determine target employee
+        // Target employee
         const targetEmployeeId =
             role === 'EMPLOYEE'
                 ? employeeId
                 : req.query.employeeId || employeeId;
 
-        // 🔐 EMPLOYEE: can update only self-editable fields
-        if (role === 'EMPLOYEE') {
-            const forbidden = Object.keys(body).filter(
-                key => !SELF_EDITABLE_FIELDS.includes(key)
-            );
-
-            if (forbidden.length > 0) {
-                return res.status(403).json({
-                    status: 'error',
-                    statusCode: 403,
-                    message: `You cannot update fields: ${forbidden.join(', ')}`
-                });
-            }
-        }
-
-        // 🔐 HR / ADMIN: block self-privilege escalation
-        if (
-            (role === 'HR' || role === 'ADMIN') &&
-            targetEmployeeId === employeeId
-        ) {
-            if ('role' in body || 'is_active' in body) {
-                return res.status(403).json({
-                    status: 'error',
-                    statusCode: 403,
-                    message: 'You cannot modify your own role or active status'
-                });
-            }
-        }
-
-        // 🧹 Filter allowed fields
-        const updateData = {};
-
-        Object.keys(body).forEach(key => {
-            if (
-                SELF_EDITABLE_FIELDS.includes(key) ||
-                (RESTRICTED_FIELDS.includes(key) && role !== 'EMPLOYEE')
-            ) {
-                updateData[key] = body[key];
-            }
-        });
-
-        if (Object.keys(updateData).length === 0) {
+        // 1️⃣ Reject empty body
+        if (!body || Object.keys(body).length === 0) {
             return res.status(400).json({
                 status: 'error',
                 statusCode: 400,
-                message: 'No valid fields provided for update'
+                message: 'No fields provided for update'
             });
         }
 
-        await profileModel.updateEmployee(targetEmployeeId, updateData);
+        // 2️⃣ Field validation based on role
+        let allowedFields = [];
+
+        if (role === 'EMPLOYEE') {
+            allowedFields = SELF_EDITABLE_FIELDS;
+        } else {
+            allowedFields = [
+                ...SELF_EDITABLE_FIELDS,
+                ...RESTRICTED_FIELDS
+            ];
+        }
+
+        const invalidFields = Object.keys(body).filter(
+            key => !allowedFields.includes(key)
+        );
+
+        if (invalidFields.length > 0) {
+            return res.status(403).json({
+                status: 'error',
+                statusCode: 403,
+                message: `You cannot update fields: ${invalidFields.join(', ')}`
+            });
+        }
+
+        // 3️⃣ Prevent HR/MANAGER assigning ADMIN role
+        if (body.role === 'ADMIN' && role !== 'ADMIN') {
+            return res.status(403).json({
+                status: 'error',
+                statusCode: 403,
+                message: 'Only ADMIN can assign ADMIN role'
+            });
+        }
+
+        // 4️⃣ Prevent self privilege escalation (optional but good)
+        if (
+            targetEmployeeId === employeeId &&
+            role !== 'ADMIN' &&
+            ('role' in body || 'is_active' in body)
+        ) {
+            return res.status(403).json({
+                status: 'error',
+                statusCode: 403,
+                message: 'You cannot modify your own role or active status'
+            });
+        }
+
+        // 5️⃣ Update
+        await profileModel.updateEmployee(targetEmployeeId, body);
 
         return res.status(200).json({
             status: 'success',
@@ -162,72 +171,6 @@ exports.updateProfile = async (req, res) => {
         return res.status(500).json({
             status: 'error',
             statusCode: 500,
-            message: 'Internal server error'
-        });
-    }
-};
-
-
-exports.updateRestrictedProfile = async (req, res) => {
-    try {
-        const { employeeId } = req.params;
-        const updates = req.body;
-        const requesterRole = req.user.role;
-
-        // 1️⃣ Reject empty body
-        if (!updates || Object.keys(updates).length === 0) {
-            return res.status(400).json({
-                status: 'error',
-                statusCode: 400,
-                message: 'No fields provided for update'
-            });
-        }
-
-        // 2️⃣ Allow ONLY restricted fields
-        const invalidFields = Object.keys(updates).filter(
-            field => !RESTRICTED_FIELDS.includes(field)
-        );
-
-        if (invalidFields.length > 0) {
-            return res.status(400).json({
-                status: 'error',
-                statusCode: 400,
-                message: `Invalid fields in request: ${invalidFields.join(', ')}`
-            });
-        }
-
-        // 3️⃣ Prevent non-admins assigning ADMIN role
-        if (updates.role === 'ADMIN' && requesterRole !== 'ADMIN') {
-            return res.status(403).json({
-                status: 'error',
-                statusCode: 403,
-                message: 'Only ADMIN can assign ADMIN role'
-            });
-        }
-
-        // 4️⃣ Check employee exists
-        const employee = await profileModel.getEmployeeById(employeeId);
-        if (!employee) {
-            return res.status(404).json({
-                status: 'error',
-                statusCode: 404,
-                message: 'Employee not found'
-            });
-        }
-
-        // 5️⃣ Update
-        await profileModel.updateEmployee(employeeId, updates);
-
-        return res.status(200).json({
-            status: 'success',
-            statusCode: 200,
-            message: 'Restricted profile fields updated successfully',
-            data: {}
-        });
-
-    } catch (err) {
-        console.error('Restricted profile update error:', err);
-        return res.status(500).json({
             message: 'Internal server error'
         });
     }
@@ -265,7 +208,12 @@ exports.uploadDocument = async (req, res) => {
             });
         }
 
-        if (!ALLOWED_DOCUMENTS.includes(document_type)) {
+        // UPDATED VALIDATION
+        const isValidDoc = ALLOWED_DOCUMENTS.find(
+            doc => doc.type === document_type
+        );
+
+        if (!isValidDoc) {
             return res.status(400).json({
                 status: 'error',
                 statusCode: 400,

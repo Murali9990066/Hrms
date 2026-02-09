@@ -97,12 +97,17 @@ CREATE TABLE IF NOT EXISTS documents (
   employee_id BIGINT NOT NULL,
 
   document_type ENUM(
-    'PROFILE_PHOTO',
-    'RESUME',
-    'DEGREE_CERTIFICATE',
-    'EXPERIENCE_LETTER',
-    'ADDRESS_PROOF',
-    'CANCELLED_CHEQUE'
+    'PROFESSIONAL_DOCUMENTS',
+    'DEGREE',
+    'AADHAAR',
+    'TAX_DEDUCTIONS_SUPPORTING_DOCUMENTS',
+    'EMPLOYMENT_CONTRACT',
+    'PREVIOUS_EMPLOYMENT_DOCUMENTS',
+    'BANK_ACCOUNT_DETAILS',
+    'EMPLOYEE_PHOTO',
+    'PAN',
+    'CV',
+    'OTHER'
   ) NOT NULL,
 
   file_key VARCHAR(255) NOT NULL,
@@ -127,6 +132,75 @@ CREATE TABLE IF NOT EXISTS documents (
 `;
 
 /* ============================================================
+   PROJECTS TABLE
+   - Master project data
+   - Managed by HR/Admin/Managers
+============================================================ */
+
+const createProjectsTable = `
+CREATE TABLE IF NOT EXISTS projects (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+
+  name VARCHAR(150) NOT NULL,
+
+  type ENUM('INTERNAL','CLIENT') NOT NULL,
+  client_name VARCHAR(150) NULL,
+
+  project_manager BIGINT NOT NULL,
+
+  start_date DATE NOT NULL,
+  end_date DATE NULL,
+
+  status ENUM('ACTIVE','PAUSED','CLOSED')
+         DEFAULT 'ACTIVE',
+
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+             ON UPDATE CURRENT_TIMESTAMP,
+
+  INDEX idx_project_manager (project_manager),
+
+  CONSTRAINT fk_project_manager
+    FOREIGN KEY (project_manager)
+    REFERENCES employees(id)
+    ON DELETE RESTRICT
+);
+`;
+
+/* ============================================================
+   PROJECT ASSIGNMENTS TABLE
+   - Tracks which employee worked on which project
+   - Maintains historical assignment data
+============================================================ */
+
+const createProjectAssignmentsTable = `
+CREATE TABLE IF NOT EXISTS project_assignments (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+
+  project_id BIGINT NOT NULL,
+  employee_id BIGINT NOT NULL,
+
+  assigned_from DATE NOT NULL,
+  assigned_to DATE NULL,
+
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+  INDEX idx_project_id (project_id),
+  INDEX idx_employee_id (employee_id),
+
+  CONSTRAINT fk_assignment_project
+    FOREIGN KEY (project_id)
+    REFERENCES projects(id)
+    ON DELETE CASCADE,
+
+  CONSTRAINT fk_assignment_employee
+    FOREIGN KEY (employee_id)
+    REFERENCES employees(id)
+    ON DELETE CASCADE
+);
+`;
+
+/* ============================================================
    EXECUTION
 ============================================================ */
 
@@ -139,6 +213,12 @@ CREATE TABLE IF NOT EXISTS documents (
 
     await pool.query(createOtpLogsTable);
     console.log('✅ otp_logs table ready');
+
+    await pool.query(createProjectsTable);
+    console.log('✅ projects table ready');
+
+    await pool.query(createProjectAssignmentsTable);
+    console.log('✅ project_assignments table ready');
 
     await pool.query(createDocumentsTable);
     console.log('✅ documents table ready');

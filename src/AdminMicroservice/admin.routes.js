@@ -1,9 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const adminController = require('./admin.controller');
+const { authenticate, authorizeRoles } = require('../middlewares/auth.middleware');
+router.get('/employees', authenticate, adminController.getAllEmployees);
+router.get('/employees/:employeeId', authenticate, adminController.getAllEmployees);
+router.patch('/employees/:employeeId/profile', authenticate, adminController.adminUpdateEmployeeProfile);
 
-router.get('/employees', adminController.getAllEmployees);
-router.patch('/employees/:employeeId/status', adminController.updateEmployeeStatus);
-router.patch('/employees/:employeeId/role', adminController.updateEmployeeRole);
 
 module.exports = router;

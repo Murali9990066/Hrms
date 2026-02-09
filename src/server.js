@@ -8,6 +8,7 @@ const cors = require('cors');
 const authRoutes = require('./AuthMicroservice/auth.routes');
 const profileRoutes = require('./ProfileMicroservice/profile.routes');
 const adminRoutes = require('./AdminMicroservice/admin.routes');
+const projectRoutes = require('./ProjectMicroservice/project.routes');
 
 const app = express();
 
@@ -23,6 +24,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use('/auth', authRoutes);
 app.use('/profile', profileRoutes);
 app.use('/admin', adminRoutes);
+app.use('/projects', projectRoutes);
 
 /* -------------------- SERVER -------------------- */
 const PORT = process.env.PORT || 3000;
