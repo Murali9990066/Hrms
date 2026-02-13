@@ -12,6 +12,7 @@ router.put('/updateProfile', authenticate, profileController.updateProfile);
 router.post('/documents/upload', authenticate, profileController.upload.single('file'), profileController.uploadDocument);
 router.get('/documents',authenticate,profileController.getDocuments);
 router.get('/documents/access',authenticate,profileController.accessDocument);
+router.delete('/documents/delete',authenticate,profileController.deleteDocument);
 
 
 module.exports = router;

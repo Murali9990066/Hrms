@@ -2,7 +2,7 @@ const profileModel = require('./profile.model');
 
 const multer = require('multer');
 const multerS3 = require('multer-s3');
-const { S3Client,GetObjectCommand } = require('@aws-sdk/client-s3');
+const { S3Client, GetObjectCommand, DeleteObjectCommand } = require('@aws-sdk/client-s3');
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 const path = require('path');
 const { stat } = require('fs');
@@ -197,8 +197,23 @@ const upload = multer({
 
 exports.uploadDocument = async (req, res) => {
     try {
-        const employeeId = req.user.employeeId;
+        const { role, employeeId } = req.user;
+        const { employeeId: queryEmployeeId } = req.query;
         const document_type = req.body?.document_type;
+
+        let targetEmployeeId;
+
+        if (['EMPLOYEE', 'MANAGER'].includes(role)) {
+            targetEmployeeId = employeeId;
+        } else if (['ADMIN', 'HR'].includes(role)) {
+            targetEmployeeId = queryEmployeeId || employeeId;
+        } else {
+            return res.status(403).json({
+                status: 'error',
+                statusCode: 403,
+                message: 'Unauthorized to upload documents'
+            });
+        }
 
         if (!document_type) {
             return res.status(400).json({
@@ -208,7 +223,6 @@ exports.uploadDocument = async (req, res) => {
             });
         }
 
-        // UPDATED VALIDATION
         const isValidDoc = ALLOWED_DOCUMENTS.find(
             doc => doc.type === document_type
         );
@@ -230,7 +244,7 @@ exports.uploadDocument = async (req, res) => {
         }
 
         await profileModel.insertDocument({
-            employee_id: employeeId,
+            employee_id: targetEmployeeId,
             document_type,
             file_key: req.file.key,
             original_file_name: req.file.originalname
@@ -360,5 +374,84 @@ exports.accessDocument = async (req, res) => {
         });
     }
 };
+
+exports.deleteDocument = async (req, res) => {
+    try {
+        const { role, employeeId } = req.user;
+        const { document_type, employeeId: queryEmployeeId } = req.query;
+
+        if (!document_type) {
+            return res.status(400).json({
+                status: 'error',
+                statusCode: 400,
+                message: 'document_type is required'
+            });
+        }
+
+        let targetEmployeeId;
+
+        // 🔒 EMPLOYEE → ONLY OWN DOCS
+        if (role === 'EMPLOYEE', 'MANAGER') {
+            targetEmployeeId = employeeId;
+        }
+
+        // 👑 ADMIN / HR → CAN DELETE ANYONE
+        else if (['ADMIN', 'HR'].includes(role)) {
+            targetEmployeeId = queryEmployeeId || employeeId;
+        }
+
+        // 🚫 OTHER ROLES BLOCKED
+        else {
+            return res.status(403).json({
+                status: 'error',
+                statusCode: 403,
+                message: 'Unauthorized to delete documents'
+            });
+        }
+
+        // Fetch document
+        const document = await profileModel.getEmployeeDocumentByType(
+            targetEmployeeId,
+            document_type
+        );
+
+        if (!document) {
+            return res.status(404).json({
+                status: 'error',
+                statusCode: 404,
+                message: 'Document not found'
+            });
+        }
+
+        /* ===== DELETE FROM S3 ===== */
+        await s3.send(
+            new DeleteObjectCommand({
+                Bucket: process.env.S3_BUCKET_NAME,
+                Key: document.file_key
+            })
+        );
+
+        /* ===== DELETE FROM DB ===== */
+        await profileModel.deleteDocumentByType(
+            targetEmployeeId,
+            document_type
+        );
+
+        return res.status(200).json({
+            status: 'success',
+            statusCode: 200,
+            message: 'Document deleted successfully'
+        });
+
+    } catch (error) {
+        console.error('deleteDocument error:', error);
+        return res.status(500).json({
+            status: 'error',
+            statusCode: 500,
+            message: 'Failed to delete document'
+        });
+    }
+};
+
 
 exports.upload = upload;

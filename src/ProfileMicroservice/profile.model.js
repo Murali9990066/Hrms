@@ -169,3 +169,18 @@ exports.getEmployeeDocumentByType = async (employeeId, documentType) => {
 
     return rows[0];
 };
+
+/**
+ * Delete employee document by type
+ */
+exports.deleteDocumentByType = async (employeeId, documentType) => {
+    await pool.query(
+        `
+        DELETE FROM documents
+        WHERE employee_id = ?
+          AND document_type = ?
+        `,
+        [employeeId, documentType]
+    );
+};
+
