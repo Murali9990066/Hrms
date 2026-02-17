@@ -199,7 +199,7 @@ exports.uploadDocument = async (req, res) => {
     try {
         const { role, employeeId } = req.user;
         const { employeeId: queryEmployeeId } = req.query;
-        const document_type = req.body?.document_type;
+        let document_type = req.body?.document_type?.trim().toUpperCase();
 
         let targetEmployeeId;
 
@@ -274,15 +274,27 @@ exports.uploadDocument = async (req, res) => {
 exports.getDocuments = async (req, res) => {
     try {
         const { role, employeeId } = req.user;
+        const { employeeId: paramEmployeeId } = req.params;
 
         let targetEmployeeId;
 
-        // EMPLOYEE → can see only own documents
+        // EMPLOYEE → only own docs
         if (role === 'EMPLOYEE') {
             targetEmployeeId = employeeId;
-        } else {
-            // HR / ADMIN / MANAGER
-            targetEmployeeId = req.query.employeeId || employeeId;
+        }
+
+        // ADMIN / HR / MANAGER → can view any employee
+        else if (['ADMIN', 'HR', 'MANAGER'].includes(role)) {
+            targetEmployeeId = paramEmployeeId || employeeId;
+        }
+
+        // Other roles blocked
+        else {
+            return res.status(403).json({
+                status: 'error',
+                statusCode: 403,
+                message: 'Unauthorized to view documents'
+            });
         }
 
         const documents = await profileModel.getEmployeeDocuments(targetEmployeeId);
@@ -307,23 +319,35 @@ exports.getDocuments = async (req, res) => {
 exports.accessDocument = async (req, res) => {
     try {
         const { role, employeeId } = req.user;
-        const { document_type, employeeId: queryEmployeeId } = req.query;
+        let { document_type, employeeId: queryEmployeeId } = req.query;
 
         if (!document_type) {
             return res.status(400).json({
                 status: 'error',
-                statusCode: 400,
                 message: 'document_type is required'
             });
         }
 
-        // EMPLOYEE → only own documents
-        const targetEmployeeId =
-            role === 'EMPLOYEE'
-                ? employeeId
-                : queryEmployeeId || employeeId;
+        // Normalize
+        document_type = document_type.trim().toUpperCase();
 
-        // Fetch document metadata
+        let targetEmployeeId;
+
+        // Employee → only own doc
+        if (role === 'EMPLOYEE') {
+            targetEmployeeId = employeeId;
+        }
+        // Admin/HR/Manager → can access employee doc
+        else if (['ADMIN', 'HR', 'MANAGER'].includes(role)) {
+            targetEmployeeId = queryEmployeeId || employeeId;
+        }
+        else {
+            return res.status(403).json({
+                status: 'error',
+                message: 'Unauthorized access'
+            });
+        }
+
         const document = await profileModel.getEmployeeDocumentByType(
             targetEmployeeId,
             document_type
@@ -332,32 +356,33 @@ exports.accessDocument = async (req, res) => {
         if (!document) {
             return res.status(404).json({
                 status: 'error',
-                statusCode: 404,
                 message: 'Document not found'
             });
         }
 
-        /* ================= VIEW URL ================= */
+        /* ===== Generate S3 signed URLs ===== */
+        const viewUrl = await getSignedUrl(
+            s3,
+            new GetObjectCommand({
+                Bucket: process.env.S3_BUCKET_NAME,
+                Key: document.file_key
+            }),
+            { expiresIn: 300 }
+        );
 
-        const viewCommand = new GetObjectCommand({
-            Bucket: process.env.S3_BUCKET_NAME,
-            Key: document.file_key
-        });
-
-        /* ================= DOWNLOAD URL ================= */
-
-        const downloadCommand = new GetObjectCommand({
-            Bucket: process.env.S3_BUCKET_NAME,
-            Key: document.file_key,
-            ResponseContentDisposition: `attachment; filename="${document.original_file_name}"`
-        });
-
-        const viewUrl = await getSignedUrl(s3, viewCommand, { expiresIn: 300 });
-        const downloadUrl = await getSignedUrl(s3, downloadCommand, { expiresIn: 300 });
+        const downloadUrl = await getSignedUrl(
+            s3,
+            new GetObjectCommand({
+                Bucket: process.env.S3_BUCKET_NAME,
+                Key: document.file_key,
+                ResponseContentDisposition:
+                    `attachment; filename="${document.original_file_name}"`
+            }),
+            { expiresIn: 300 }
+        );
 
         return res.status(200).json({
             status: 'success',
-            statusCode: 200,
             message: 'Document access URLs generated successfully',
             data: {
                 view_url: viewUrl,
@@ -365,12 +390,11 @@ exports.accessDocument = async (req, res) => {
             }
         });
 
-    } catch (error) {
-        console.error('accessDocument error:', error);
-        return res.status(500).json({
+    } catch (err) {
+        console.error('accessDocument error:', err);
+        res.status(500).json({
             status: 'error',
-            statusCode: 500,
-            message: 'Failed to generate document links'
+            message: 'Failed to generate document URLs'
         });
     }
 };
@@ -391,7 +415,7 @@ exports.deleteDocument = async (req, res) => {
         let targetEmployeeId;
 
         // 🔒 EMPLOYEE → ONLY OWN DOCS
-        if (role === 'EMPLOYEE', 'MANAGER') {
+        if (['EMPLOYEE', 'MANAGER'].includes(role)) {
             targetEmployeeId = employeeId;
         }
 

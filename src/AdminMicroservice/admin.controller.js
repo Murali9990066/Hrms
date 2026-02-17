@@ -1,5 +1,6 @@
 const jwt = require('jsonwebtoken');
 const adminModel = require('./admin.model');
+const profileModel = require('../ProfileMicroservice/profile.model');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'dev_secret_key';
 
@@ -37,18 +38,27 @@ exports.getAllEmployees = async (req, res) => {
 
         let data;
 
-        // If employeeId present → fetch single employee
         if (employeeId) {
-            data = await adminModel.getEmployeeById(employeeId);
+            // Fetch employee
+            const employee = await adminModel.getEmployeeById(employeeId);
 
-            if (!data) {
+            if (!employee) {
                 return res.status(404).json({
                     status: 'error',
                     message: 'Employee not found'
                 });
             }
+
+            // Fetch documents (reuse existing model)
+            const documents = await profileModel.getEmployeeDocuments(employeeId);
+
+            // Combine both
+            data = {
+                employee,
+                documents
+            };
         } else {
-            // Otherwise fetch all employees
+            // Fetch all employees
             data = await adminModel.getAllEmployees();
         }
 
@@ -56,7 +66,7 @@ exports.getAllEmployees = async (req, res) => {
             status: 'success',
             statusCode: 200,
             message: employeeId
-                ? 'Employee fetched successfully'
+                ? 'Employee details fetched successfully'
                 : 'Employees fetched successfully',
             data
         });

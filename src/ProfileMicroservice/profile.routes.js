@@ -10,9 +10,12 @@ const { authenticate,authorizeRoles } = require('../middlewares/auth.middleware'
 router.get('/getProfile', authenticate, profileController.getProfile);
 router.put('/updateProfile', authenticate, profileController.updateProfile);
 router.post('/documents/upload', authenticate, profileController.upload.single('file'), profileController.uploadDocument);
-router.get('/documents',authenticate,profileController.getDocuments);
-router.get('/documents/access',authenticate,profileController.accessDocument);
-router.delete('/documents/delete',authenticate,profileController.deleteDocument);
 
+/* 👇 IMPORTANT ORDER */
+router.get('/documents/access', authenticate, profileController.accessDocument);
+router.get('/documents/:employeeId', authenticate, profileController.getDocuments);
+router.get('/documents', authenticate, profileController.getDocuments);
+
+router.delete('/documents/delete', authenticate, profileController.deleteDocument);
 
 module.exports = router;

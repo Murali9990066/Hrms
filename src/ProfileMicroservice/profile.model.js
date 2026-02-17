@@ -129,43 +129,21 @@ exports.getEmployeeDocuments = async (employeeId) => {
     return rows;
 };
 
-exports.getEmployeeDocuments = async (employeeId) => {
-    const [rows] = await pool.query(
-        `
-    SELECT
-      id,
-      document_type,
-      original_file_name,
-      status,
-      uploaded_at,
-      approved_by,
-      approved_at
-    FROM documents
-    WHERE employee_id = ?
-    ORDER BY uploaded_at DESC
-    `,
-        [employeeId]
-    );
 
-    return rows;
-};
 
 exports.getEmployeeDocumentByType = async (employeeId, documentType) => {
-    const [rows] = await pool.query(
-        `
-    SELECT
-      id,
-      file_key,
-      original_file_name,
-      status
-    FROM documents
-    WHERE employee_id = ?
-      AND document_type = ?
-    ORDER BY uploaded_at DESC
-    LIMIT 1
-    `,
-        [employeeId, documentType]
-    );
+    const [rows] = await pool.query(`
+        SELECT
+          id,
+          file_key,
+          original_file_name,
+          status
+        FROM documents
+        WHERE employee_id = ?
+          AND UPPER(TRIM(document_type)) = UPPER(TRIM(?))
+        ORDER BY uploaded_at DESC
+        LIMIT 1
+    `, [employeeId, documentType]);
 
     return rows[0];
 };

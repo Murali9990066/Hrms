@@ -5,7 +5,7 @@ const pool = require('../database/db.connection');
  */
 exports.getAllEmployees = async () => {
     const [rows] = await pool.query(
-        `SELECT id,full_name, email, role, is_active, created_at
+        `SELECT id,full_name, email,mobile_number, role, is_active, created_at
      FROM employees
      ORDER BY created_at DESC`
     );
