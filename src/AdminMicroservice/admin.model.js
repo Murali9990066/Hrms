@@ -32,6 +32,8 @@ exports.getEmployeeById = async (employeeId) => {
       gender,
       blood_group,
       emergency_contact,
+      emergency_contact_name,
+      emergency_contact_relation,
 
       designation,
       project_assigned,
@@ -41,6 +43,8 @@ exports.getEmployeeById = async (employeeId) => {
       manager_name,
 
       profile_completed,
+      is_profile_updated,
+      is_document_updated,
 
       created_at,
       updated_at
@@ -98,4 +102,45 @@ exports.updateEmployee = async (employeeId, updates) => {
 
     return result;
 };
+
+/**
+ * Update document status and save the Reviewer's Name instead of ID
+ */
+exports.updateDocumentStatus = async (document_id, employee_id, status, reviewerId) => {
+    const query = `
+        UPDATE documents 
+        SET 
+            status = ?, 
+            approved_at = CURRENT_TIMESTAMP,
+            approved_by = (SELECT full_name FROM employees WHERE id = ?) -- 👈 Lookup name by ID
+        WHERE id = ? AND employee_id = ?
+    `;
+
+    const [result] = await pool.query(query, [
+        status.toUpperCase(),
+        reviewerId,    // Used for the subquery lookup
+        document_id,
+        employee_id
+    ]);
+
+    return result.affectedRows > 0;
+};
+
+/**
+ * NEW: Fetch only the public directory fields for regular employees
+ */
+exports.getPublicDirectoryById = async (employeeId) => {
+    const query = `
+        SELECT 
+            e.full_name, e.email, e.mobile_number, e.dob, 
+            e.employee_code, e.designation, e.project_assigned,
+            m.full_name AS reporting_manager
+        FROM employees e
+        LEFT JOIN employees m ON e.manager_name = m.id
+        WHERE e.id = ?
+    `;
+    const [rows] = await pool.query(query, [employeeId]);
+    return rows[0];
+};
+
 

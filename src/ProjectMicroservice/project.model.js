@@ -145,21 +145,28 @@ exports.getActiveAssignment = async (
 
 /**
  * Get project team
+ * Links projects.project_manager to employees.id (Auto-increment ID)
  */
 exports.getProjectTeam = async (projectId) => {
-    const [rows] = await pool.query(
-        `SELECT
-            pa.*,
+    const query = `
+        SELECT
+            pa.id AS assignment_id,
+            pa.project_id,
+            pa.employee_id,
+            pa.assigned_from,
             e.full_name,
-            e.designation
-         FROM project_assignments pa
-         JOIN employees e
-         ON pa.employee_id = e.id
-         WHERE pa.project_id = ?
-         ORDER BY pa.assigned_from DESC`,
-        [projectId]
-    );
+            e.designation,
+            m.full_name AS reporting_manager -- Fetches manager name using auto-increment ID
+        FROM project_assignments pa
+        JOIN employees e ON pa.employee_id = e.id
+        JOIN projects p ON pa.project_id = p.id
+        JOIN employees m ON p.project_manager = m.id -- Join project_manager ID to employees.id
+        WHERE pa.project_id = ?
+        AND pa.assigned_to IS NULL -- Ensures removed employees don't show up
+        ORDER BY pa.assigned_from DESC
+    `;
 
+    const [rows] = await pool.query(query, [projectId]);
     return rows;
 };
 
@@ -168,18 +175,22 @@ exports.getProjectTeam = async (projectId) => {
  * Get employee project history
  */
 exports.getEmployeeProjects = async (employeeId) => {
-    const [rows] = await pool.query(
-        `SELECT
-            pa.*,
+    const query = `
+        SELECT
+            pa.id AS assignment_id,
+            pa.project_id,
+            pa.assigned_from,
+            pa.assigned_to,
             p.name AS project_name,
-            p.status AS project_status
-         FROM project_assignments pa
-         JOIN projects p
-         ON pa.project_id = p.id
-         WHERE pa.employee_id = ?
-         ORDER BY pa.assigned_from DESC`,
-        [employeeId]
-    );
+            p.status AS project_status,
+            m.full_name AS reporting_manager -- Links project_manager to employees.id
+        FROM project_assignments pa
+        JOIN projects p ON pa.project_id = p.id
+        JOIN employees m ON p.project_manager = m.id
+        WHERE pa.employee_id = ?
+        ORDER BY pa.assigned_from DESC
+    `;
 
+    const [rows] = await pool.query(query, [employeeId]);
     return rows;
 };

@@ -5,6 +5,7 @@ const { authenticate, authorizeRoles } = require('../middlewares/auth.middleware
 router.get('/employees', authenticate, adminController.getAllEmployees);
 router.get('/employees/:employeeId', authenticate, adminController.getAllEmployees);
 router.patch('/employees/:employeeId/profile', authenticate, adminController.adminUpdateEmployeeProfile);
+router.patch('/documents/review', authenticate, adminController.reviewEmployeeDocument);
 
 
 module.exports = router;

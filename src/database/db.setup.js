@@ -43,6 +43,8 @@ CREATE TABLE IF NOT EXISTS employees (
   gender VARCHAR(20) NULL,
   blood_group VARCHAR(10) NULL,
   emergency_contact VARCHAR(20) NULL,
+  emergency_contact_name VARCHAR(150) NULL,      
+  emergency_contact_relation VARCHAR(100) NULL,  
 
   -- Org details
   designation VARCHAR(100) NULL,
@@ -55,6 +57,8 @@ CREATE TABLE IF NOT EXISTS employees (
 
   -- System flags
   profile_completed BOOLEAN NOT NULL DEFAULT FALSE,
+  is_profile_updated BOOLEAN NOT NULL DEFAULT FALSE,
+  is_document_updated BOOLEAN NOT NULL DEFAULT FALSE,
 
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -118,7 +122,7 @@ CREATE TABLE IF NOT EXISTS documents (
 
   uploaded_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 
-  approved_by BIGINT NULL,
+  approved_by VARCHAR(255) NULL,
   approved_at DATETIME NULL,
 
   INDEX idx_employee_docs (employee_id),

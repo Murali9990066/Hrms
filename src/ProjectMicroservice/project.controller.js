@@ -112,12 +112,14 @@ exports.updateProject = async (req, res) => {
 /**
  * DELETE PROJECT
  * Roles: ADMIN, HR only
+ * Validation: Cannot delete if project has active members
  */
 exports.deleteProject = async (req, res) => {
     try {
         const { role } = req.user;
         const { projectId } = req.params;
 
+        // 1. Role Authorization
         if (!['ADMIN', 'HR'].includes(role)) {
             return res.status(403).json({
                 status: 'error',
@@ -126,8 +128,8 @@ exports.deleteProject = async (req, res) => {
             });
         }
 
+        // 2. Check if project exists
         const existingProject = await projectModel.getProjectById(projectId);
-
         if (!existingProject) {
             return res.status(404).json({
                 status: 'error',
@@ -136,6 +138,22 @@ exports.deleteProject = async (req, res) => {
             });
         }
 
+        // 3. NEW VALIDATION: Check for active members
+        // Using our model function that filters by pa.assigned_to IS NULL
+        const activeTeam = await projectModel.getProjectTeam(projectId);
+
+        if (activeTeam && activeTeam.length > 0) {
+            return res.status(400).json({
+                status: 'error',
+                statusCode: 400,
+                message: `Cannot delete project: This project has ${activeTeam.length} active member(s). Please remove all members before deleting.`,
+                data: { 
+                    message: `Cannot delete project: This project has ${activeTeam.length} active member(s). Please remove all members before deleting.`,
+                    activeMembers: activeTeam.length }
+            });
+        }
+
+        // 4. Proceed with deletion
         await projectModel.deleteProject(projectId);
 
         return res.status(200).json({

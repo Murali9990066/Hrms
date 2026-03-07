@@ -24,6 +24,8 @@ exports.getEmployeeById = async (employeeId) => {
       gender,
       blood_group,
       emergency_contact,
+      emergency_contact_name,
+      emergency_contact_relation,
 
       designation,
       project_assigned,
@@ -33,6 +35,8 @@ exports.getEmployeeById = async (employeeId) => {
       manager_name,
 
       profile_completed,
+      is_profile_updated,
+      is_document_updated,
 
       created_at,
       updated_at
@@ -112,6 +116,7 @@ exports.getEmployeeDocuments = async (employeeId) => {
         `
     SELECT
       id,
+      employee_id,
       document_type,
       file_key,
       original_file_name,
@@ -161,4 +166,46 @@ exports.deleteDocumentByType = async (employeeId, documentType) => {
         [employeeId, documentType]
     );
 };
+
+exports.syncProfileStatus = async (employeeId) => {
+    // 1. Fetch current employee data
+    const [empRows] = await pool.query('SELECT * FROM employees WHERE id = ?', [employeeId]);
+    const emp = empRows[0];
+    if (!emp) return;
+
+    // 2. Calculate Profile Flag (Check mandatory fields)
+    const mandatoryFields = [
+        'full_name', 'mobile_number', 'dob', 'gender',
+        'emergency_contact_name', 'emergency_contact_relation'
+    ];
+    const isProfileUpdated = mandatoryFields.every(field =>
+        emp[field] && emp[field].toString().trim() !== ''
+    );
+
+    // 3. Calculate Document Flag (Check if mandatory docs are 'APPROVED')
+    const [docRows] = await pool.query(
+        'SELECT document_type FROM documents WHERE employee_id = ? AND status = "APPROVED"',
+        [employeeId]
+    );
+    const approvedTypes = docRows.map(d => d.document_type);
+    const mandatoryDocs = ['DEGREE', 'AADHAAR', 'PREVIOUS_EMPLOYMENT_DOCUMENTS', 'BANK_ACCOUNT_DETAILS', 'CV'];
+
+    const isDocumentUpdated = mandatoryDocs.every(type => approvedTypes.includes(type));
+
+    // 4. Calculate Master Flag
+    const profile_completed = isProfileUpdated && isDocumentUpdated;
+
+    // 5. Save all 3 to the database
+    await pool.query(
+        `UPDATE employees SET 
+            is_profile_updated = ?, 
+            is_document_updated = ?, 
+            profile_completed = ? 
+         WHERE id = ?`,
+        [isProfileUpdated, isDocumentUpdated, profile_completed, employeeId]
+    );
+
+    return { isProfileUpdated, isDocumentUpdated, profile_completed };
+};
+
 

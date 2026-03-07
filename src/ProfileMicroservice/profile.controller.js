@@ -21,7 +21,9 @@ const SELF_EDITABLE_FIELDS = [
     'dob',
     'gender',
     'blood_group',
-    'emergency_contact'
+    'emergency_contact',
+    'emergency_contact_name',
+    'emergency_contact_relation'
 ];
 
 // Fields only HR / ADMIN can update
@@ -159,6 +161,9 @@ exports.updateProfile = async (req, res) => {
         // 5️⃣ Update
         await profileModel.updateEmployee(targetEmployeeId, body);
 
+        // 🆕 Trigger Sync to update profile_completed status
+        await profileModel.syncProfileStatus(targetEmployeeId);
+
         return res.status(200).json({
             status: 'success',
             statusCode: 200,
@@ -249,6 +254,9 @@ exports.uploadDocument = async (req, res) => {
             file_key: req.file.key,
             original_file_name: req.file.originalname
         });
+
+        // 🆕 Trigger Sync to update is_document_updated status
+        await profileModel.syncProfileStatus(targetEmployeeId);
 
         return res.status(201).json({
             status: 'success',
