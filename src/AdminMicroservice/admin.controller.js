@@ -1,6 +1,9 @@
 const jwt = require('jsonwebtoken');
 const adminModel = require('./admin.model');
 const profileModel = require('../ProfileMicroservice/profile.model');
+const fs = require('fs');
+const ExcelJS = require('exceljs');
+const multer = require('multer');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'dev_secret_key';
 
@@ -207,4 +210,111 @@ exports.reviewEmployeeDocument = async (req, res) => {
     }
 };
 
+
+/**
+ * HELPER: Local Disk Storage
+ * Specifically for temporary Excel processing
+ */
+const localConfig = multer.diskStorage({
+    destination: (req, file, cb) => {
+        const uploadPath = './uploads/temp';
+        // Create folder if it doesn't exist
+        if (!fs.existsSync(uploadPath)) {
+            fs.mkdirSync(uploadPath, { recursive: true });
+        }
+        cb(null, uploadPath);
+    },
+    filename: (req, file, cb) => {
+        cb(null, `batch-${Date.now()}-${file.originalname}`);
+    }
+});
+
+// Export this to use in your routes file
+exports.uploadLocal = multer({ storage: localConfig });
+
+/**
+ * API: Bulk Onboard Employees
+ * Reads Excel -> Validates -> Bulk Inserts to DB
+ */
+exports.bulkOnboard = async (req, res) => {
+    try {
+        const { role } = req.user;
+
+        // 🛡️ STRICT ROLE GATE: Only ADMIN and HR allowed
+        if (!['ADMIN', 'HR'].includes(role)) {
+            // If there's a file uploaded locally, delete it before exiting
+            if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+
+            return res.status(403).json({
+                status: 'error',
+                statusCode: 403,
+                message: 'Access Denied: Only HR or ADMIN can perform bulk onboarding'
+            });
+        }
+
+        if (!req.file) {
+            return res.status(400).json({ status: 'error',
+                 statusCode: 400,
+                 message: 'No file uploaded' });
+        }
+
+        const workbook = new ExcelJS.Workbook();
+        await workbook.xlsx.readFile(req.file.path);
+        const worksheet = workbook.getWorksheet(1);
+
+        const employees = [];
+
+        worksheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
+            if (rowNumber === 1) return; // Skip Header
+
+            const email = row.getCell(1).value?.toString().trim();
+            const empCode = row.getCell(9).value?.toString().trim();
+            const fullName = row.getCell(3).value?.toString().trim();
+
+            if (!email || !empCode || !fullName) {
+                console.error(`Row ${rowNumber} skipped: Missing mandatory data.`);
+                return;
+            }
+
+            const empData = [
+                email,
+                row.getCell(2).value?.toString().toUpperCase() || 'EMPLOYEE',
+                fullName,
+                row.getCell(4).value?.toString() || null,
+                row.getCell(5).value || null,
+                row.getCell(6).value ? new Date(row.getCell(6).value) : null,
+                row.getCell(7).value || null,
+                row.getCell(8).value || 'Software Engineer',
+                empCode,
+                row.getCell(10).value ? new Date(row.getCell(10).value) : new Date(),
+                row.getCell(11).value || 'Unassigned',
+                row.getCell(12).value?.toString() || null, // blood_group
+                row.getCell(13).value?.toString() || null, // emergency_contact
+                row.getCell(14).value?.toString() || null, // emergency_contact_relation
+                row.getCell(15).value?.toString() || null  // emergency_contact_name
+            ];
+
+            employees.push(empData);
+        });
+
+        if (employees.length > 0) {
+            await adminModel.bulkInsertEmployees([employees]);
+        }
+
+        // Clean up temp file
+        if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+
+        return res.status(200).json({
+            status: 'success',
+            statusCode: 200,
+            message: `Successfully processed ${employees.length} employees`,
+            data: { count: employees.length }
+        });
+
+    } catch (error) {
+        if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+        console.error('Bulk Onboard Error:', error);
+        return res.status(500).json({ status: 'error', message: 'Internal Server Error' });
+    }
+};
 

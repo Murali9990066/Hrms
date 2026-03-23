@@ -143,4 +143,26 @@ exports.getPublicDirectoryById = async (employeeId) => {
     return rows[0];
 };
 
-
+exports.bulkInsertEmployees = async (employees) => {
+    const query = `
+        INSERT INTO employees (
+            email, role, full_name, mobile_number, address, dob, gender, 
+            designation, employee_code, joining_date, manager_name,
+            blood_group, emergency_contact, emergency_contact_relation, emergency_contact_name
+        ) VALUES ? 
+        ON DUPLICATE KEY UPDATE 
+            full_name = VALUES(full_name),
+            mobile_number = VALUES(mobile_number),
+            address = VALUES(address),
+            designation = VALUES(designation),
+            manager_name = VALUES(manager_name),
+            blood_group = VALUES(blood_group),
+            emergency_contact = VALUES(emergency_contact),
+            emergency_contact_relation = VALUES(emergency_contact_relation),
+            emergency_contact_name = VALUES(emergency_contact_name),
+            updated_at = CURRENT_TIMESTAMP;
+    `;
+    // Using 'pool' as defined in your model file
+    const [result] = await pool.query(query, employees);
+    return result;
+};

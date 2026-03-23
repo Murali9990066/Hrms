@@ -7,5 +7,13 @@ router.get('/employees/:employeeId', authenticate, adminController.getAllEmploye
 router.patch('/employees/:employeeId/profile', authenticate, adminController.adminUpdateEmployeeProfile);
 router.patch('/documents/review', authenticate, adminController.reviewEmployeeDocument);
 
+router.post(
+    '/bulk-onboard',
+    authenticate,
+    authorizeRoles('ADMIN', 'HR'), 
+    adminController.uploadLocal.single('file'),
+    adminController.bulkOnboard
+);
+
 
 module.exports = router;
